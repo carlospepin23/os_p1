@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#define SH_MEMORY_NAME "/shm_block"
+#define SH_MEMORY_NAME "shm_pids_"
 #define N_ELEM 3
 #define BLOCK_SIZE (N_ELEM * sizeof(int))
 #define PLANES_LIMIT 20
@@ -19,25 +19,33 @@ int *array_mmap;
 int fd;
 pid_t ground_control_pid;
 
-void Traffic(int signum) {
+void Traffic(int signum)
+{
   // TODO:
-  // Calculate the number of waiting planes. 
+  // Calculate the number of waiting planes.
   int waiting = planes - takeoffs;
 
   // Check if there are 10 or more waiting planes to send a signal and increment
   // planes. Ensure signals are sent and planes are incremented only if the
   // total number of planes has not been exceeded.
-  if (waiting >= 10) {
+  if (waiting >= 10)
+  {
     printf("RUNWAY OVERLOADED\n");
   }
 
-  if (planes < PLANES_LIMIT) {
-          planes+=5;                
-          kill(ground_control_pid, SIGUSR2); // send to radio?
+  if (planes < PLANES_LIMIT)
+  {
+    planes += 5;
+    // Send SIGUSR2 to radio (PID stored in array_mmap[1])
+    if (array_mmap[1] > 0)
+    {
+      kill(array_mmap[1], SIGUSR2);
+    }
   }
 }
 
-void sigtermHandler(int sig) {
+void sigtermHandler(int sig)
+{
   munmap(array_mmap, BLOCK_SIZE);
   close(fd);
   printf("finalization of operations...\n");
@@ -45,16 +53,19 @@ void sigtermHandler(int sig) {
   exit(0);
 }
 
-void sigusr1Handler(int sig) {
-  takeoffs+=5;
+void sigusr1Handler(int sig)
+{
+  takeoffs += 5;
 }
 
 // SIGALRM handler to call Traffic
-void alarmHandler(int sig) {
-    Traffic(sig);
+void alarmHandler(int sig)
+{
+  Traffic(sig);
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
   // TODO:
   // 1. Open the shared memory block and store this process PID in position 2
   //    of the memory block.
@@ -65,12 +76,13 @@ int main(int argc, char* argv[]) {
   array_mmap =
       mmap(0, BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-  if (array_mmap == MAP_FAILED) {
+  if (array_mmap == MAP_FAILED)
+  {
     perror("mmap failed");
     exit(1);
   }
   ground_control_pid = getpid();
-  array_mmap[2]=ground_control_pid; // type casting?
+  array_mmap[2] = ground_control_pid; // type casting?
 
   // 3. Configure SIGTERM and SIGUSR1 handlers
   //    - The SIGTERM handler should: close the shared memory, print
@@ -103,7 +115,8 @@ int main(int argc, char* argv[]) {
   setitimer(ITIMER_REAL, &timer, NULL);
 
   // Keep process alive waiting for signals
-  while (1) pause();
+  while (1)
+    pause();
 
   return EXIT_SUCCESS;
 }

@@ -20,6 +20,7 @@ planes = 0  # planes waiting
 takeoffs = 0  # local takeoffs (per thread)
 total_takeoffs = 0  # total takeoffs
 radio_pid = 0  # Store radio PID globally for threads to access
+sigterm_sent = False  # Track if SIGTERM was sent to radio
 # Locks for runways and shared state
 runway1_lock = threading.Lock()
 runway2_lock = threading.Lock()
@@ -73,7 +74,7 @@ def HandleUSR2(signum, frame):
 def TakeOffFunction(agent_id: int):
     """Function executed by each THREAD to control takeoffs.
     Complete using runway1_lock and runway2_lock and state_lock to synchronize"""
-    global planes, takeoffs, total_takeoffs, radio_pid
+    global planes, takeoffs, total_takeoffs, radio_pid, sigterm_sent
 
     # TODO: implement the logic to control a takeoff thread
     # Use a loop that runs while total_takeoffs < TOTAL_TAKEOFFS
@@ -87,9 +88,10 @@ def TakeOffFunction(agent_id: int):
         # quick check to stop when goal reached
         with state_lock:
             if total_takeoffs >= TOTAL_TAKEOFFS:
-                # Send SIGTERM to radio when done
-                if radio_pid > 0:
+                # Send SIGTERM to radio when done (only once)
+                if radio_pid > 0 and not sigterm_sent:
                     os.kill(radio_pid, signal.SIGTERM)
+                    sigterm_sent = True
                 return
 
             # if no planes waiting, yield briefly
@@ -127,28 +129,29 @@ def TakeOffFunction(agent_id: int):
 
                 # consume a waiting plane
                 planes -= 1
-                takeoffs += 1
                 total_takeoffs += 1
-
-                local_takeoffs = takeoffs
                 current_total = total_takeoffs
                 
-                # Check if we need to send SIGUSR1 and reset
-                send_signal = (local_takeoffs == 5)
-                if send_signal:
-                    takeoffs = 0  # Reset takeoffs counter
+                # Check if we need to send SIGUSR1 every 5 total takeoffs
+                send_signal = (current_total % 5 == 0)
+                
+                # Send SIGUSR1 IMMEDIATELY while still holding state_lock
+                # This prevents other threads from sending SIGTERM before we signal
+                if send_signal and radio_pid > 0:
+                    os.kill(radio_pid, signal.SIGUSR1)
 
             # simulate time for takeoff
             time.sleep(1)
 
-            # Send SIGUSR1 to radio every 5 takeoffs
-            if send_signal and radio_pid > 0:
-                os.kill(radio_pid, signal.SIGUSR1)
-
             # if we've reached the global target, send SIGTERM to radio
+            # Only send SIGTERM after a delay to ensure radio processed all signals
             if current_total >= TOTAL_TAKEOFFS:
-                if radio_pid > 0:
-                    os.kill(radio_pid, signal.SIGTERM)
+                # Give radio extra time to process the final signal if it was just sent
+                time.sleep(0.5)
+                with state_lock:
+                    if radio_pid > 0 and not sigterm_sent:
+                        os.kill(radio_pid, signal.SIGTERM)
+                        sigterm_sent = True
                 return
 
         finally:
@@ -162,23 +165,11 @@ def launch_radio():
 
     # TODO 8: Launch the external 'radio' process using subprocess.Popen()
     
-    # Find radio executable - check current directory and test directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    possible_paths = [
-        './radio',  # Current directory (when run from air_control_py/)
-        os.path.join(script_dir, 'radio'),  # Same dir as script
-        '../test/radio',  # Test directory
-        'radio'  # Just the name (searches PATH)
-    ]
+    # Use absolute path to avoid ambiguity with radio/ directory
+    radio_path = os.path.join(os.getcwd(), 'radio')
     
-    radio_path = None
-    for path in possible_paths:
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            radio_path = path
-            break
-    
-    if not radio_path:
-        raise FileNotFoundError("Could not find radio executable")
+    if not os.path.isfile(radio_path):
+        raise FileNotFoundError(f"Could not find radio executable at {radio_path}. CWD: {os.getcwd()}")
     
     # Launch the radio process, passing shared memory name as parameter
     process = subprocess.Popen(
@@ -217,6 +208,7 @@ def main():
     radio_process.wait()
     
     # TODO 11: Release shared memory and close resources
+    del data  # Delete memoryview before closing mmap
     memory.close()
     os.close(fd)
     _libc.shm_unlink(b'shm_pids_')
