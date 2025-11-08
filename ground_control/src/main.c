@@ -15,6 +15,7 @@
 int planes = 0;
 int takeoffs = 0;
 int traffic = 0;
+
 int *array_mmap;
 int fd;
 pid_t ground_control_pid;
@@ -49,6 +50,7 @@ void sigtermHandler(int sig)
   munmap(array_mmap, BLOCK_SIZE);
   close(fd);
   printf("finalization of operations...\n");
+  shm_unlink(SH_MEMORY_NAME); // check if needed
   // kill(ground_control_pid,SIGINT);
   exit(0);
 }
@@ -70,9 +72,9 @@ int main(int argc, char *argv[])
   // 1. Open the shared memory block and store this process PID in position 2
   //    of the memory block.
 
-  // Create block
-  fd = shm_open(SH_MEMORY_NAME, O_CREAT | O_RDWR, 0666);
-  ftruncate(fd, BLOCK_SIZE);
+  // suscribe block
+  fd = shm_open(SH_MEMORY_NAME, O_RDWR, 0666);
+  // ftruncate(fd, BLOCK_SIZE);
   array_mmap =
       mmap(0, BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
