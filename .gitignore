@@ -3,6 +3,13 @@ build/
 */build/
 **/build/
 
+# Test directory and test files
+test/
+test_*.sh
+cpplint.py
+cpplint_report.txt
+input.txt
+
 # VS Code settings
 .vscode/
 

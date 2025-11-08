@@ -162,9 +162,27 @@ def launch_radio():
 
     # TODO 8: Launch the external 'radio' process using subprocess.Popen()
     
+    # Find radio executable - check current directory and test directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    possible_paths = [
+        './radio',  # Current directory (when run from air_control_py/)
+        os.path.join(script_dir, 'radio'),  # Same dir as script
+        '../test/radio',  # Test directory
+        'radio'  # Just the name (searches PATH)
+    ]
+    
+    radio_path = None
+    for path in possible_paths:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            radio_path = path
+            break
+    
+    if not radio_path:
+        raise FileNotFoundError("Could not find radio executable")
+    
     # Launch the radio process, passing shared memory name as parameter
     process = subprocess.Popen(
-        ['./radio', 'shm_pids_'],
+        [radio_path, 'shm_pids_'],
         preexec_fn=_unblock_sigusr2
     )
     return process
@@ -172,7 +190,7 @@ def launch_radio():
 
 def main():
     global shm_data, radio_pid
-
+    
     # TODO 2: set the handler for the SIGUSR2 signal to HandleUSR2
     signal.signal(signal.SIGUSR2, HandleUSR2)
     # TODO 5: Create the shared memory and store the current process PID using create_shared_memory()
