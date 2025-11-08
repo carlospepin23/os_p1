@@ -1,3 +1,0 @@
-/home/evelyn30v/OS/PP1/radio/build/CMakeFiles/radio.dir
-/home/evelyn30v/OS/PP1/radio/build/CMakeFiles/edit_cache.dir
-/home/evelyn30v/OS/PP1/radio/build/CMakeFiles/rebuild_cache.dir
