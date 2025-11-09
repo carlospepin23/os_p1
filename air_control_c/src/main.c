@@ -115,21 +115,22 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
-#include "functions.c"
+#include <sys/wait.h>
+#include "functions.h"
 
-#define SH_MEMORY_NAME "/shm_pids"
+#define SH_MEMORY_NAME "shm_pids_"
 #define N_ELEM 3
 #define BLOCK_SIZE (N_ELEM * sizeof(int))
 #define TOTAL_TAKEOFFS 20
 
-// int planes = 0;
-// int takeoffs = 0;
-// int total_takeoffs = 0;
-
-// int *array_mmap;
-// int fd;
-// pid_t air_control_pid, radio_control_pid;
-
+// Variable definitions (defined here, declared extern in functions.h)
+int planes = 0;
+int takeoffs = 0;
+int total_takeoffs = 0;
+int *array_mmap = NULL;
+int fd = -1;
+pid_t air_control_pid = 0;
+pid_t radio_control_pid = 0;
 
 pthread_mutex_t state_lock, runway1_lock, runway2_lock;
 pthread_t th1, th2, th3, th4, th5;
@@ -161,8 +162,9 @@ int main() {
     if (radio_control_pid == 0) {
         // Child: run the new program
         radio_control_pid = getpid();
-        array_mmap[1]=radio_control_pid; // type casting?
-        execlp("../../test/radio","radio",SH_MEMORY_NAME,NULL);
+        array_mmap[1]=radio_control_pid;
+        // Try to exec radio - will search in PATH and current directory
+        execlp("./radio","radio",SH_MEMORY_NAME,NULL);
         perror("exec failed");  // only runs if exec fails
         _exit(1);
     } 
@@ -198,13 +200,15 @@ int main() {
     pthread_join(th4, NULL);
     pthread_join(th5, NULL);
 
+    // Give radio time to process final signal before sending SIGTERM
+    usleep(500000);  // 500ms delay
 
     pthread_mutex_destroy(&state_lock);
     pthread_mutex_destroy(&runway1_lock);
     pthread_mutex_destroy(&runway2_lock);
 
-    printf("\n:::: End of operations ::::\n");
-    printf("Takeoffs: %d Planes: %d\n", total_takeoffs, planes);
+    // Don't print end message here - radio prints it
+    // Only radio should print the final "End of operations" message
 
     kill(radio_control_pid, SIGTERM);
     waitpid(radio_control_pid, NULL, 0);

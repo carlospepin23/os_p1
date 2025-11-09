@@ -71,20 +71,12 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include "functions.h"
 
-#define SH_MEMORY_NAME "/shm_pids"
+#define SH_MEMORY_NAME "shm_pids_"
 #define N_ELEM 3
 #define BLOCK_SIZE (N_ELEM * sizeof(int))
 #define TOTAL_TAKEOFFS 20
-
-// Variable DEFINITIONS (only here!)
-int planes = 0;
-int takeoffs = 0;
-int total_takeoffs = 0;
-int *array_mmap = NULL;
-int fd = -1;
-pid_t air_control_pid = 0;
-pid_t radio_control_pid = 0;
 
 // External declarations for mutexes (defined in main.c)
 extern pthread_mutex_t state_lock, runway1_lock, runway2_lock;
@@ -180,15 +172,15 @@ void* TakeOffsFunction(void* param) {
         
         // Perform takeoff - update shared variables
         planes--;
-        takeoffs++;
         total_takeoffs++;
+        int current_total = total_takeoffs;
         
-        // Send SIGUSR1 every 5 local takeoffs
-        if (takeoffs >= 5) {
-            if (radio_control_pid > 0) {
-                kill(radio_control_pid, SIGUSR1);
-            }
-            takeoffs = 0;
+        // Send SIGUSR1 every 5 total takeoffs (at 5, 10, 15, 20)
+        int send_signal = (current_total % 5 == 0);
+        
+        // Send signal while still holding state_lock to prevent race condition
+        if (send_signal && radio_control_pid > 0) {
+            kill(radio_control_pid, SIGUSR1);
         }
         
         // Release the state_lock
