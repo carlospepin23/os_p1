@@ -16,6 +16,6 @@ extern pid_t radio_control_pid;
 // Function declarations
 void MemoryCreate(void);
 void SigHandler2(int signal);
-void* TakeOffsFunction(void* param);
+void *TakeOffsFunction(void *param);
 
 #endif // FUNCTIONS_H
