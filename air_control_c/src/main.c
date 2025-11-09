@@ -1,4 +1,3 @@
-
 #define _POSIX_C_SOURCE 200809L
 #include <fcntl.h>
 #include <stdio.h>
@@ -28,42 +27,37 @@ pid_t radio_control_pid = 0;
 pthread_mutex_t state_lock, runway1_lock, runway2_lock;
 pthread_t th1, th2, th3, th4, th5;
 
-// void sigusr2Handler(int sig) {
-//     planes+=5;
-// }
-
-int main()
-{
-    // TODO 1: Call the function that creates the shared memory segment.
+int main() {
+    // TODO(diego.perez16) 1: Call the function that creates the shared memory
+    // segment.
     MemoryCreate();
 
-    // TODO 3: Configure the SIGUSR2 signal to increment the planes on the runway
-    // by 5.
+    // TODO(carlospepin23) 3: Configure the SIGUSR2 signal to increment the
+    // planes on the runway by 5.
     struct sigaction sa3;
     // SIGUSR2 handler
     sa3.sa_handler = SigHandler2;
     sigaction(SIGUSR2, &sa3, NULL);
 
-    // TODO 4: Launch the 'radio' executable and, once launched, store its PID in
-    // the second position of the shared memory block.
+    // TODO(diego.perez16) 4: Launch the 'radio' executable and, once launched,
+    // store its PID in the second position of the shared memory block.
 
     air_control_pid = getpid();
     array_mmap[0] = air_control_pid;
     radio_control_pid = fork();
 
-    if (radio_control_pid == 0)
-    {
+    if (radio_control_pid == 0) {
         // Child: run the new program
         radio_control_pid = getpid();
         array_mmap[1] = radio_control_pid;
         // Try to exec radio - will search in PATH and current directory
         execlp("./radio", "radio", SH_MEMORY_NAME, NULL);
-        perror("exec failed"); // only runs if exec fails
+        perror("exec failed");  // only runs if exec fails
         _exit(1);
     }
 
-    // TODO 6: Launch 5 threads which will be the controllers; each thread will
-    // execute the TakeOffsFunction().
+    // TODO(carlospepin23) 6: Launch 5 threads which will be the controllers;
+    // each thread will execute the TakeOffsFunction().
 
     // Create threads
     pthread_mutex_init(&state_lock, NULL);
@@ -82,8 +76,7 @@ int main()
                                  NULL, TakeOffsFunction, NULL);
     if (create == -1 || create2 == -1 ||
         create3 == -1 || create4 == -1 ||
-        create5 == -1)
-    {
+        create5 == -1) {
         perror("error pthreade create: ");
     }
 
@@ -95,7 +88,7 @@ int main()
     pthread_join(th5, NULL);
 
     // Give radio time to process final signal before sending SIGTERM
-    usleep(500000); // 500ms delay
+    usleep(500000);  // 500ms delay
 
     pthread_mutex_destroy(&state_lock);
     pthread_mutex_destroy(&runway1_lock);

@@ -21,25 +21,21 @@
 // External declarations for mutexes (defined in main.c)
 extern pthread_mutex_t state_lock, runway1_lock, runway2_lock;
 
-void MemoryCreate(void)
-{
+void MemoryCreate(void) {
     fd = shm_open(SH_MEMORY_NAME, O_CREAT | O_RDWR, 0666);
-    if (fd == -1)
-    {
+    if (fd == -1) {
         perror("shm_open failed");
         exit(1);
     }
 
-    if (ftruncate(fd, BLOCK_SIZE) == -1)
-    {
+    if (ftruncate(fd, BLOCK_SIZE) == -1) {
         perror("ftruncate failed");
         exit(1);
     }
 
     array_mmap = mmap(0, BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-    if (array_mmap == MAP_FAILED)
-    {
+    if (array_mmap == MAP_FAILED) {
         perror("mmap failed");
         exit(1);
     }
@@ -48,33 +44,28 @@ void MemoryCreate(void)
     memset(array_mmap, 0, BLOCK_SIZE);
 }
 
-void SigHandler2(int signal)
-{
+void SigHandler2(int signal) {
     // Signal-safe operation
     planes += 5;
 }
 
-void *TakeOffsFunction(void *param)
-{
-    (void)param; // Unused parameter
+void *TakeOffsFunction(void *param) {
+    (void)param;  // Unused parameter
 
-    while (1)
-    {
+    while (1) {
         // Use state_lock for safe access to shared variables
         pthread_mutex_lock(&state_lock);
 
         // Check if we've reached the target
-        if (total_takeoffs >= TOTAL_TAKEOFFS)
-        {
+        if (total_takeoffs >= TOTAL_TAKEOFFS) {
             pthread_mutex_unlock(&state_lock);
             break;
         }
 
         // Check if planes available - if not, wait
-        if (planes <= 0)
-        {
+        if (planes <= 0) {
             pthread_mutex_unlock(&state_lock);
-            usleep(100000); // Wait 100ms before checking again
+            usleep(100000);  // Wait 100ms before checking again
             continue;
         }
 
@@ -84,29 +75,22 @@ void *TakeOffsFunction(void *param)
         pthread_mutex_t *acquired_runway = NULL;
 
         // Try to get a runway
-        while (acquired_runway == NULL)
-        {
+        while (acquired_runway == NULL) {
             // Check if we should exit while waiting for runway
             pthread_mutex_lock(&state_lock);
-            if (total_takeoffs >= TOTAL_TAKEOFFS)
-            {
+            if (total_takeoffs >= TOTAL_TAKEOFFS) {
                 pthread_mutex_unlock(&state_lock);
                 return NULL;
             }
             pthread_mutex_unlock(&state_lock);
 
             // Try to acquire runway1 or runway2
-            if (pthread_mutex_trylock(&runway1_lock) == 0)
-            {
+            if (pthread_mutex_trylock(&runway1_lock) == 0) {
                 acquired_runway = &runway1_lock;
-            }
-            else if (pthread_mutex_trylock(&runway2_lock) == 0)
-            {
+            } else if (pthread_mutex_trylock(&runway2_lock) == 0) {
                 acquired_runway = &runway2_lock;
-            }
-            else
-            {
-                usleep(10000); // Wait 10ms before retrying
+            } else {
+                usleep(10000);  // Wait 10ms before retrying
             }
         }
 
@@ -114,15 +98,13 @@ void *TakeOffsFunction(void *param)
         pthread_mutex_lock(&state_lock);
 
         // Double-check conditions after acquiring runway
-        if (total_takeoffs >= TOTAL_TAKEOFFS)
-        {
+        if (total_takeoffs >= TOTAL_TAKEOFFS) {
             pthread_mutex_unlock(&state_lock);
             pthread_mutex_unlock(acquired_runway);
             break;
         }
 
-        if (planes <= 0)
-        {
+        if (planes <= 0) {
             pthread_mutex_unlock(&state_lock);
             pthread_mutex_unlock(acquired_runway);
             continue;
@@ -136,9 +118,8 @@ void *TakeOffsFunction(void *param)
         // Send SIGUSR1 every 5 total takeoffs (at 5, 10, 15, 20)
         int send_signal = (current_total % 5 == 0);
 
-        // Send signal while still holding state_lock to prevent race condition
-        if (send_signal && radio_control_pid > 0)
-        {
+        // Send signal while still holding state_lock to prevent race
+        if (send_signal && radio_control_pid > 0) {
             kill(radio_control_pid, SIGUSR1);
         }
 
