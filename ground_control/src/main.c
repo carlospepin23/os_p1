@@ -1,12 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 #include <fcntl.h>
-#include <string.h>
-#include <sys/mman.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
+#include <sys/mman.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #define SH_MEMORY_NAME "shm_pids_"
 #define N_ELEM 3
@@ -34,7 +34,6 @@ void Traffic(int signum) {
 
   if (planes < PLANES_LIMIT) {
     planes += 5;
-    // Send SIGUSR2 to radio (PID stored in array_mmap[1])
     if (array_mmap[1] > 0) {
       kill(array_mmap[1], SIGUSR2);
     }
@@ -45,7 +44,7 @@ void SigtermHandler(int sig) {
   munmap(array_mmap, BLOCK_SIZE);
   close(fd);
   printf("finalization of operations...\n");
-  shm_unlink(SH_MEMORY_NAME);  // check if needed
+  shm_unlink(SH_MEMORY_NAME);
   exit(0);
 }
 
@@ -65,8 +64,7 @@ int main(int argc, char *argv[]) {
 
   // suscribe block
   fd = shm_open(SH_MEMORY_NAME, O_RDWR, 0666);
-  array_mmap =
-      mmap(0, BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  array_mmap = mmap(0, BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
   if (array_mmap == MAP_FAILED) {
     perror("mmap failed");
@@ -82,22 +80,18 @@ int main(int argc, char *argv[]) {
 
   struct sigaction sa, sa2;
 
-  // SIGTERM handler
   sa.sa_handler = SigtermHandler;
   sigaction(SIGTERM, &sa, NULL);
 
-  // SIGUSR1 handler
   sa2.sa_handler = Sigusr1Handler;
   sigaction(SIGUSR1, &sa2, NULL);
 
   // 2. Configure the timer to execute the Traffic function.
 
-  // Install SIGALRM handler
   struct sigaction sa_alarm = {0};
   sa_alarm.sa_handler = AlarmHandler;
   sigaction(SIGALRM, &sa_alarm, NULL);
 
-  // Configure timer for 500ms
   struct itimerval timer;
   timer.it_value.tv_sec = 0;
   timer.it_value.tv_usec = 500000;
@@ -105,7 +99,6 @@ int main(int argc, char *argv[]) {
   timer.it_interval.tv_usec = 500000;
   setitimer(ITIMER_REAL, &timer, NULL);
 
-  // Keep process alive waiting for signals
   while (1)
     pause();
 

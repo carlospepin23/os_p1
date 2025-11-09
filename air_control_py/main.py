@@ -85,16 +85,13 @@ def TakeOffFunction(agent_id: int):
     # Send SIGTERM when the total takeoffs target is reached
 
     while True:
-        # quick check to stop when goal reached
         with state_lock:
             if total_takeoffs >= TOTAL_TAKEOFFS:
-                # Send SIGTERM to radio when done (only once)
                 if radio_pid > 0 and not sigterm_sent:
                     os.kill(radio_pid, signal.SIGTERM)
                     sigterm_sent = True
                 return
 
-            # if no planes waiting, yield briefly
             if planes <= 0:
                 need_wait = True
             else:
@@ -104,7 +101,6 @@ def TakeOffFunction(agent_id: int):
             time.sleep(0.1)
             continue
 
-        # Try to acquire either runway without blocking indefinitely
         acquired_runway = None
         for runway in (runway1_lock, runway2_lock):
             if runway.acquire(blocking=False):
@@ -112,41 +108,30 @@ def TakeOffFunction(agent_id: int):
                 break
 
         if acquired_runway is None:
-            # no runway available right now
             time.sleep(0.05)
             continue
 
-        # We have exclusive access to a runway; update shared state safely
         try:
             with state_lock:
-                # double-check stopping condition
                 if total_takeoffs >= TOTAL_TAKEOFFS:
                     return
 
                 if planes <= 0:
-                    # nothing to take off; release runway and continue
                     continue
 
-                # consume a waiting plane
                 planes -= 1
                 total_takeoffs += 1
                 current_total = total_takeoffs
-                
-                # Check if we need to send SIGUSR1 every 5 total takeoffs
+
                 send_signal = (current_total % 5 == 0)
-                
-                # Send SIGUSR1 IMMEDIATELY while still holding state_lock
-                # This prevents other threads from sending SIGTERM before we signal
+
                 if send_signal and radio_pid > 0:
                     os.kill(radio_pid, signal.SIGUSR1)
 
             # simulate time for takeoff
             time.sleep(1)
 
-            # if we've reached the global target, send SIGTERM to radio
-            # Only send SIGTERM after a delay to ensure radio processed all signals
             if current_total >= TOTAL_TAKEOFFS:
-                # Give radio extra time to process the final signal if it was just sent
                 time.sleep(0.5)
                 with state_lock:
                     if radio_pid > 0 and not sigterm_sent:
@@ -164,14 +149,12 @@ def launch_radio():
         signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGUSR2})
 
     # TODO 8: Launch the external 'radio' process using subprocess.Popen()
-    
-    # Use absolute path to avoid ambiguity with radio/ directory
+
     radio_path = os.path.join(os.getcwd(), 'radio')
     
     if not os.path.isfile(radio_path):
         raise FileNotFoundError(f"Could not find radio executable at {radio_path}. CWD: {os.getcwd()}")
-    
-    # Launch the radio process, passing shared memory name as parameter
+
     process = subprocess.Popen(
         [radio_path, 'shm_pids_'],
         preexec_fn=_unblock_sigusr2
@@ -203,8 +186,7 @@ def main():
     # TODO 10: Wait for all threads to finish their work
     for t in threads:
         t.join()
-    
-    # Wait for radio process to finish
+
     radio_process.wait()
     
     # TODO 11: Release shared memory and close resources
