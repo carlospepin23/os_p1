@@ -14,13 +14,19 @@ int sh_memory_open = -1;
 void SigHandler1(int signal) {
   takeoffs = takeoffs + 5;
   printf("Takeoff clearance %d\n", takeoffs);
-  kill((*pids)[2], SIGUSR1);
+  // Only send if ground_control PID is valid
+  if ((*pids)[2] > 0) {
+    kill((*pids)[2], SIGUSR1);
+  }
 };
 
 void SigHandler2(int signal) {
   planes += 5;
   printf("Planes: %d\n", planes);
-  kill((*pids)[0], SIGUSR2);
+  // Only send if air_control PID is valid
+  if ((*pids)[0] > 0) {
+    kill((*pids)[0], SIGUSR2);
+  }
   if (planes - takeoffs >= 10 && planes < 50) {
     printf("RUNWAY OVERLOADED!!!! \n");
   }
@@ -64,5 +70,6 @@ int main(int argc, char* argv[]) {
   signal(SIGUSR2, SigHandler2);
   signal(SIGTERM, SigTerm);
 
-  while (takeoffs <= 100) pause();
+  while (takeoffs <= 100)
+    pause();
 }
