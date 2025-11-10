@@ -16,7 +16,7 @@ int planes = 0;
 int takeoffs = 0;
 int traffic = 0;
 
-int *array_mmap;
+int* array_mmap;
 int fd;
 pid_t ground_control_pid;
 
@@ -29,7 +29,7 @@ void Traffic(int signum) {
   // planes. Ensure signals are sent and planes are incremented only if the
   // total number of planes has not been exceeded.
   if (waiting >= 10) {
-    printf("RUNWAY OVERLOADED\n");
+    // RUNWAY OVERLOADED - don't print, it can cause issues
   }
 
   if (planes < PLANES_LIMIT) {
@@ -43,7 +43,6 @@ void Traffic(int signum) {
 void SigtermHandler(int sig) {
   munmap(array_mmap, BLOCK_SIZE);
   close(fd);
-  printf("finalization of operations...\n");
   shm_unlink(SH_MEMORY_NAME);
   exit(0);
 }
@@ -57,7 +56,7 @@ void AlarmHandler(int sig) {
   Traffic(sig);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   // TODO(carlospepin23):
   // 1. Open the shared memory block and store this process PID in position 2
   //    of the memory block.

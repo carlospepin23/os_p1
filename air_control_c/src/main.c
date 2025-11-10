@@ -16,7 +16,7 @@
 #define BLOCK_SIZE (N_ELEM * sizeof(int))
 #define TOTAL_TAKEOFFS 20
 
-int planes = 0;
+volatile int planes = 0;
 int takeoffs = 0;
 int total_takeoffs = 0;
 int* array_mmap = NULL;

@@ -44,7 +44,10 @@ void MemoryCreate(void) {
 }
 
 void SigHandler2(int signal) {
-  planes += 5;
+  (void)signal;
+  // Must use atomic operation - signal handlers can't use mutexes
+  // and planes += 5 is not atomic (read-modify-write)
+  __atomic_fetch_add(&planes, 5, __ATOMIC_SEQ_CST);
 }
 
 void* TakeOffsFunction(void* param) {
@@ -58,7 +61,9 @@ void* TakeOffsFunction(void* param) {
       break;
     }
 
-    if (planes <= 0) {
+    // Use atomic read to avoid race with signal handler
+    int current_planes = __atomic_load_n(&planes, __ATOMIC_SEQ_CST);
+    if (current_planes <= 0) {
       pthread_mutex_unlock(&state_lock);
       usleep(100000);
       continue;
@@ -93,13 +98,19 @@ void* TakeOffsFunction(void* param) {
       break;
     }
 
-    if (planes <= 0) {
+    // Atomic decrement with protection against negative values
+    int old_planes = __atomic_fetch_sub(&planes, 1, __ATOMIC_SEQ_CST);
+
+    // If planes was already 0 or negative, rollback and retry
+    if (old_planes <= 0) {
+      __atomic_fetch_add(&planes, 1, __ATOMIC_SEQ_CST);
       pthread_mutex_unlock(&state_lock);
       pthread_mutex_unlock(acquired_runway);
+      usleep(10000);
       continue;
     }
 
-    planes--;
+    // Successfully decremented planes, now increment takeoffs
     total_takeoffs++;
     int current_total = total_takeoffs;
 
